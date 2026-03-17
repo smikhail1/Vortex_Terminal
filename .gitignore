@@ -13,3 +13,9 @@
 .externalNativeBuild
 .cxx
 local.properties
+# Vortex Private Data
+*.key
+*.json
+.env
+keys.properties
+/server/config.py
