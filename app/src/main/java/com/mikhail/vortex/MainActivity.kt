@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mikhail.vortex.ui.planner.PlannerTabContent
+import com.mikhail.vortex.ui.intelligence.IntelligenceTabContent
 import com.mikhail.vortex.viewmodel.DashboardViewModel
 import com.mikhail.vortex.viewmodel.LogCardUi
 import com.mikhail.vortex.viewmodel.LogFilter
@@ -78,7 +79,8 @@ private val LogGreenBg = Color(0x1625A55B)
 enum class BottomTab {
     TERMINAL,
     LOGS,
-    PLANNER
+    PLANNER,
+    INTELLIGENCE
 }
 
 class MainActivity : ComponentActivity() {
@@ -240,6 +242,19 @@ fun VortexTerminalScreen() {
                         )
                     }
                 }
+
+                BottomTab.INTELLIGENCE -> {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        IntelligenceTabContent(
+                            serverStatus = serverStatus,
+                            serverDot = serverDot
+                        )
+                    }
+                }
             }
 
             BottomBar(
@@ -331,6 +346,14 @@ fun BottomBar(
                 modifier = Modifier.weight(1f)
             ) {
                 onSelect(BottomTab.PLANNER)
+            }
+
+            BottomTabButton(
+                title = "Intel",
+                selected = selectedTab == BottomTab.INTELLIGENCE,
+                modifier = Modifier.weight(1f)
+            ) {
+                onSelect(BottomTab.INTELLIGENCE)
             }
         }
     }

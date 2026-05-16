@@ -4,6 +4,7 @@ import com.mikhail.vortex.model.DashboardResponse
 import com.mikhail.vortex.model.HealthResponse
 import com.mikhail.vortex.model.HistoryRow
 import com.mikhail.vortex.model.SpotPlannerResponse
+import com.mikhail.vortex.model.IntelligenceResponse
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import retrofit2.http.GET
@@ -27,6 +28,9 @@ interface ApiService {
 
     @GET("api/watchlist")
     suspend fun getWatchlist(): WatchlistResponse
+
+    @GET("api/intelligence")
+    suspend fun getIntelligence(): IntelligenceResponse
 }
 
 object ApiClient {
