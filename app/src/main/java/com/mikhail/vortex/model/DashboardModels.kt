@@ -7,7 +7,8 @@ data class DashboardResponse(
     val system: SystemData = SystemData(),
     val terminal: TerminalData = TerminalData(),
     val today: TodaySummary = TodaySummary(),
-    val portfolio: PortfolioSummary = PortfolioSummary()
+    val portfolio: PortfolioSummary = PortfolioSummary(),
+    val context_fusion: ContextFusionBlock = ContextFusionBlock()
 )
 
 data class Market(
@@ -128,6 +129,86 @@ data class PortfolioSummary(
     val fut_free: Double = 0.0,
     val fut_equity: Double = 0.0,
     val total_equity: Double = 0.0
+)
+
+data class ContextFusionBlock(
+    val available: Boolean = false,
+    val summary: ContextFusionSummary? = null,
+    val symbols: List<ContextFusionSymbol> = emptyList()
+)
+
+data class ContextFusionSummary(
+    val symbols_count: Int? = null,
+    val final_view_counts: Map<String, Int>? = null,
+    val heatmap_bias: String? = null,
+    val heatmap_net_bias_score: Double? = null
+)
+
+data class ContextFusionSymbol(
+    val symbol: String = "",
+    val strategy_state: String? = null,
+    val side: String? = null,
+    val strategy: FusionStrategy? = null,
+    val policy: FusionPolicy? = null,
+    val ea: FusionEa? = null,
+    val setup_zone: FusionSetupZone? = null,
+    val heatmap: FusionHeatmap? = null,
+    val final: FusionFinal? = null
+)
+
+data class FusionFinal(
+    val view: String? = null,
+    val score: Int? = null,
+    val reasons: List<String> = emptyList(),
+    val warnings: List<String> = emptyList(),
+    val blockers: List<String> = emptyList()
+)
+
+data class FusionSetupZone(
+    val preferred_zone: String? = null,
+    val zone_quality: Int? = null,
+    val support_status: String? = null,
+    val range_position_pct: Double? = null,
+    val near_support: Boolean? = null,
+    val near_resistance: Boolean? = null,
+    val near_ema20: Boolean? = null,
+    val warnings: List<String> = emptyList()
+)
+
+data class FusionHeatmap(
+    val global: FusionHeatmapGlobal? = null,
+    val local_bias: String? = null,
+    val trend_4h: String? = null,
+    val adx: Double? = null,
+    val rsi_main: Double? = null,
+    val vol_ratio: Double? = null
+)
+
+data class FusionHeatmapGlobal(
+    val bias: String? = null,
+    val net_bias_score: Double? = null,
+    val support_status: String? = null,
+    val support_score: Int? = null
+)
+
+data class FusionPolicy(
+    val code: String? = null,
+    val reason: String? = null
+)
+
+data class FusionStrategy(
+    val score: Int? = null,
+    val setup_type: String? = null,
+    val args_text: String? = null,
+    val blocked_reason: String? = null
+)
+
+data class FusionEa(
+    val present: Boolean? = null,
+    val grade: String? = null,
+    val score: Int? = null,
+    val label: String? = null,
+    val raw: String? = null
 )
 
 data class HealthResponse(

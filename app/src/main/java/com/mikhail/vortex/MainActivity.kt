@@ -43,6 +43,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mikhail.vortex.model.ContextFusionSymbol
 import com.mikhail.vortex.ui.planner.PlannerTabContent
 import com.mikhail.vortex.ui.intelligence.IntelligenceTabContent
 import com.mikhail.vortex.viewmodel.DashboardViewModel
@@ -63,6 +64,8 @@ private val Blue = Color(0xFF5DA9FF)
 private val Yellow = Color(0xFFFFC245)
 private val Green = Color(0xFF31C26A)
 private val Red = Color(0xFFFF5E57)
+private val Orange = Color(0xFFFF9F43)
+private val Purple = Color(0xFFB978FF)
 private val Neutral = Color(0xFF7F8A99)
 private val FutBadge = Color(0xFF3D6DFF)
 private val SpotBadge = Color(0xFFFFB020)
@@ -860,14 +863,28 @@ fun MiniWatchlistBlock(items: List<MiniWatchUi>) {
                                 fontSize = 11.sp
                             )
                         }
+
+                        if (item.fusionAvailable) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            FusionMiniBlock(fusion = item.fusion)
+                        }
                     }
 
                     Column(horizontalAlignment = Alignment.End) {
                         Text(
                             text = item.scoreText,
-                            color = Yellow,
+                            color = TxtSoft,
                             fontWeight = FontWeight.Bold
                         )
+                        if (item.fusionScoreText.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(3.dp))
+                            Text(
+                                text = item.fusionScoreText,
+                                color = fusionColor(item.fusion?.final?.view),
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp
+                            )
+                        }
                         Spacer(modifier = Modifier.height(3.dp))
                         Text(
                             text = item.priceText,
@@ -884,6 +901,66 @@ fun MiniWatchlistBlock(items: List<MiniWatchUi>) {
                 }
             }
         }
+    }
+}
+
+@Composable
+fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
+    if (fusion == null) {
+        Box(
+            modifier = Modifier
+                .background(PanelSoft, RoundedCornerShape(10.dp))
+                .border(1.dp, Divider, RoundedCornerShape(10.dp))
+                .padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = "Fusion: no data",
+                color = Neutral,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+        return
+    }
+
+    val view = fusion.final?.view
+    val color = fusionColor(view)
+    val zone = compactZoneName(fusion.setup_zone?.preferred_zone)
+    val zoneQuality = fusion.setup_zone?.zone_quality?.let { " q$it" }.orEmpty()
+    val heat = compactHeatmapName(
+        fusion.heatmap?.global?.bias ?: fusion.heatmap?.local_bias
+    )
+    val blocker = fusion.final?.blockers?.firstOrNull()
+        ?: fusion.policy?.code
+        ?: fusion.strategy?.blocked_reason
+    val need = fusionNeedText(fusion)
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(12.dp))
+            .border(1.dp, color.copy(alpha = 0.34f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        Text(
+            text = fusionLabel(view),
+            color = color,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "Zone: $zone$zoneQuality | Heat: $heat",
+            color = TxtSoft,
+            fontSize = 11.sp
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = if (blocker.isNullOrBlank()) need else "Block: $blocker",
+            color = if (blocker.isNullOrBlank()) TxtSoft else color,
+            fontSize = 11.sp,
+            fontWeight = FontWeight.SemiBold
+        )
     }
 }
 
@@ -1032,4 +1109,72 @@ fun Dot(color: Color) {
             .size(12.dp)
             .background(color, CircleShape)
     )
+}
+
+fun fusionLabel(view: String?): String {
+    return when (view) {
+        "ENTRY_CANDIDATE_STRONG" -> "✅ STRONG"
+        "RAW_CANDIDATE_WAIT_EA_GOOD_ZONE" -> "🧠 WAIT EA / GOOD ZONE"
+        "RAW_CANDIDATE_WAIT_EA" -> "WAIT EA"
+        "RAW_CANDIDATE_BAD_CONTEXT" -> "BAD CONTEXT"
+        "POLICY_BLOCKED" -> "🛡 POLICY BLOCKED"
+        "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> "GOOD ZONE / WAIT TRIGGER"
+        "WATCH_ONLY" -> "WATCH ONLY"
+        "STRATEGY_BLOCKED" -> "STRATEGY BLOCKED"
+        "NO_TA_DATA" -> "NO TA"
+        else -> "Fusion: ${view?.replace('_', ' ') ?: "no view"}"
+    }
+}
+
+fun fusionColor(view: String?): Color {
+    return when (view) {
+        "ENTRY_CANDIDATE_STRONG" -> Green
+        "RAW_CANDIDATE_WAIT_EA_GOOD_ZONE" -> Blue
+        "RAW_CANDIDATE_WAIT_EA" -> Color(0xFF7895B2)
+        "RAW_CANDIDATE_BAD_CONTEXT" -> Orange
+        "POLICY_BLOCKED" -> Red
+        "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> Purple
+        "WATCH_ONLY" -> Neutral
+        "STRATEGY_BLOCKED" -> Neutral
+        "NO_TA_DATA" -> Color(0xFF4F5865)
+        else -> TxtSoft
+    }
+}
+
+fun compactZoneName(zone: String?): String {
+    return when (zone) {
+        "long_pullback_zone" -> "Long Pullback"
+        "short_pullback_zone" -> "Short Pullback"
+        "middle_no_trade_zone" -> "Mid / No Trade"
+        "high_zone" -> "High Zone"
+        "low_zone" -> "Low Zone"
+        "neutral_zone" -> "Neutral"
+        null, "" -> "-"
+        else -> zone.replace('_', ' ')
+    }
+}
+
+fun compactHeatmapName(bias: String?): String {
+    return when (bias) {
+        "strong_bullish" -> "Strong Bull"
+        "mild_bullish" -> "Mild Bull"
+        "mixed_neutral" -> "Mixed"
+        "mild_bearish" -> "Mild Bear"
+        "strong_bearish" -> "Strong Bear"
+        "no_data" -> "No Data"
+        null, "" -> "-"
+        else -> bias.replace('_', ' ')
+    }
+}
+
+fun fusionNeedText(fusion: ContextFusionSymbol): String {
+    val warnings = fusion.final?.warnings.orEmpty()
+    val reasons = fusion.final?.reasons.orEmpty()
+    val eaLabel = fusion.ea?.label ?: fusion.ea?.grade
+    return when {
+        warnings.isNotEmpty() -> "Need: ${warnings.first()}"
+        reasons.isNotEmpty() -> reasons.first()
+        eaLabel.isNullOrBlank() -> "Need: trigger/EA"
+        else -> "EA: $eaLabel"
+    }
 }

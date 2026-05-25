@@ -3,12 +3,14 @@ package com.mikhail.vortex.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.mikhail.vortex.api.ApiClient
+import com.mikhail.vortex.model.ContextFusionBlock
+import com.mikhail.vortex.model.ContextFusionSymbol
 import com.mikhail.vortex.model.DashboardResponse
 import com.mikhail.vortex.model.Position
 import com.mikhail.vortex.model.TerminalCard
 import com.mikhail.vortex.model.TodaySummary
 import com.mikhail.vortex.model.WatchlistItem
+import com.mikhail.vortex.api.ApiClient
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -51,6 +53,7 @@ data class MiniWatchUi(
     val symbol: String,
     val setupType: String,
     val scoreText: String,
+    val fusionScoreText: String = "",
     val priceText: String,
     val hasFutures: Boolean = false,
     val hasSpot: Boolean = false,
@@ -60,7 +63,9 @@ data class MiniWatchUi(
     val reasonText: String = "",
     val triggerText: String = "-",
     val invalidationText: String = "-",
-    val expiresText: String = "-"
+    val expiresText: String = "-",
+    val fusionAvailable: Boolean = false,
+    val fusion: ContextFusionSymbol? = null
 )
 
 data class LogCardUi(
@@ -200,11 +205,15 @@ class DashboardViewModel : ViewModel() {
                     null
                 }
                 _miniWatchlist.value = if (watchlistResponse != null) {
-                    buildMiniWatchlistFromApi(watchlistResponse.data.all)
+                    buildMiniWatchlistFromApi(
+                        items = watchlistResponse.data.all,
+                        fusionBlock = dashboard.context_fusion
+                    )
                 } else {
                     buildMiniWatchlist(
                         dashboard.terminal.futures_cards,
-                        dashboard.terminal.spot_cards
+                        dashboard.terminal.spot_cards,
+                        dashboard.context_fusion
                     )
                 }
 
@@ -299,7 +308,12 @@ class DashboardViewModel : ViewModel() {
         )
     }
 
-    private fun buildMiniWatchlistFromApi(items: List<WatchlistItem>): List<MiniWatchUi> {
+    private fun buildMiniWatchlistFromApi(
+        items: List<WatchlistItem>,
+        fusionBlock: ContextFusionBlock
+    ): List<MiniWatchUi> {
+        val fusionBySymbol = fusionBySymbol(fusionBlock)
+
         return items
             .sortedWith(
                 compareBy<WatchlistItem> { statusRank(it.status) }
@@ -308,10 +322,12 @@ class DashboardViewModel : ViewModel() {
             )
             .take(12)
             .map { item ->
+                val fusion = fusionBySymbol[item.symbol.uppercase()]
                 MiniWatchUi(
                     symbol = item.symbol.uppercase(),
                     setupType = normalizeSetup(item.setupType),
-                    scoreText = "Sc ${item.score}",
+                    scoreText = "Raw Sc ${item.score}",
+                    fusionScoreText = fusion?.final?.score?.let { "Fusion $it" }.orEmpty(),
                     priceText = formatPrice(item.price),
                     hasFutures = item.market.lowercase() == "fut",
                     hasSpot = item.market.lowercase() == "spot",
@@ -321,14 +337,17 @@ class DashboardViewModel : ViewModel() {
                     reasonText = reasonText(item),
                     triggerText = if (item.triggerPrice > 0.0) formatPrice(item.triggerPrice) else "-",
                     invalidationText = if (item.invalidationPrice > 0.0) formatPrice(item.invalidationPrice) else "-",
-                    expiresText = expiresText(item.expiresInSec)
+                    expiresText = expiresText(item.expiresInSec),
+                    fusionAvailable = fusionBlock.available,
+                    fusion = fusion
                 )
             }
     }
 
     private fun buildMiniWatchlist(
         futuresCards: List<TerminalCard>,
-        spotCards: List<TerminalCard>
+        spotCards: List<TerminalCard>,
+        fusionBlock: ContextFusionBlock
     ): List<MiniWatchUi> {
         data class WatchAgg(
             val symbol: String,
@@ -371,6 +390,8 @@ class DashboardViewModel : ViewModel() {
             }
         }
 
+        val fusionBySymbol = fusionBySymbol(fusionBlock)
+
         return map.values
             .sortedWith(
                 compareBy<WatchAgg> { statusRank(it.status) }
@@ -379,10 +400,12 @@ class DashboardViewModel : ViewModel() {
             )
             .take(12)
             .map {
+                val fusion = fusionBySymbol[it.symbol.uppercase()]
                 MiniWatchUi(
                     symbol = it.symbol,
                     setupType = normalizeSetup(it.setupType),
-                    scoreText = "Sc ${it.score}",
+                    scoreText = "Raw Sc ${it.score}",
+                    fusionScoreText = fusion?.final?.score?.let { score -> "Fusion $score" }.orEmpty(),
                     priceText = formatPrice(it.price),
                     hasFutures = it.hasFutures,
                     hasSpot = it.hasSpot,
@@ -392,9 +415,18 @@ class DashboardViewModel : ViewModel() {
                     reasonText = it.reason.ifBlank { "-" },
                     triggerText = "-",
                     invalidationText = "-",
-                    expiresText = "-"
+                    expiresText = "-",
+                    fusionAvailable = fusionBlock.available,
+                    fusion = fusion
                 )
             }
+    }
+
+    private fun fusionBySymbol(fusionBlock: ContextFusionBlock): Map<String, ContextFusionSymbol> {
+        if (!fusionBlock.available) return emptyMap()
+        return fusionBlock.symbols
+            .filter { it.symbol.isNotBlank() }
+            .associateBy { it.symbol.uppercase() }
     }
 
     private fun statusRank(status: String): Int {
