@@ -914,7 +914,7 @@ fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
                 .padding(horizontal = 10.dp, vertical = 8.dp)
         ) {
             Text(
-                text = "Fusion: no data",
+                text = "Fusion: нет данных",
                 color = Neutral,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -925,15 +925,15 @@ fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
 
     val view = fusion.final?.view
     val color = fusionColor(view)
-    val zone = compactZoneName(fusion.setup_zone?.preferred_zone)
+    val zone = zoneLabelRu(fusion.setup_zone?.preferred_zone)
     val zoneQuality = fusion.setup_zone?.zone_quality?.let { " q$it" }.orEmpty()
-    val heat = compactHeatmapName(
+    val heat = heatmapLabelRu(
         fusion.heatmap?.global?.bias ?: fusion.heatmap?.local_bias
     )
     val blocker = fusion.final?.blockers?.firstOrNull()
         ?: fusion.policy?.code
         ?: fusion.strategy?.blocked_reason
-    val need = fusionNeedText(fusion)
+    val need = fusionNeedTextRu(fusion)
 
     Column(
         modifier = Modifier
@@ -943,20 +943,24 @@ fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
             .padding(horizontal = 10.dp, vertical = 8.dp)
     ) {
         Text(
-            text = fusionLabel(view),
+            text = fusionLabelRu(view),
             color = color,
             fontWeight = FontWeight.Bold,
             fontSize = 12.sp
         )
         Spacer(modifier = Modifier.height(4.dp))
         Text(
-            text = "Zone: $zone$zoneQuality | Heat: $heat",
+            text = "Зона: $zone$zoneQuality | Рынок: $heat",
             color = TxtSoft,
             fontSize = 11.sp
         )
         Spacer(modifier = Modifier.height(3.dp))
         Text(
-            text = if (blocker.isNullOrBlank()) need else "Block: $blocker",
+            text = if (blocker.isNullOrBlank()) {
+                "Нужно: ${needLabelRu(need)}"
+            } else {
+                "Блок: ${blockerLabelRu(blocker)}"
+            },
             color = if (blocker.isNullOrBlank()) TxtSoft else color,
             fontSize = 11.sp,
             fontWeight = FontWeight.SemiBold
@@ -1138,6 +1142,88 @@ fun fusionColor(view: String?): Color {
         "STRATEGY_BLOCKED" -> Neutral
         "NO_TA_DATA" -> Color(0xFF4F5865)
         else -> TxtSoft
+    }
+}
+
+fun fusionLabelRu(view: String?): String {
+    return when (view) {
+        "ENTRY_CANDIDATE_STRONG" -> "✅ Сильный кандидат"
+        "RAW_CANDIDATE_WAIT_EA_GOOD_ZONE" -> "🧠 Хорошая зона, ждём EA"
+        "RAW_CANDIDATE_WAIT_EA" -> "⏳ Ждём EA"
+        "RAW_CANDIDATE_BAD_CONTEXT" -> "⚠️ Плохой контекст"
+        "POLICY_BLOCKED" -> "🛡 Заблокировано фильтром"
+        "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> "👀 Хорошая зона, ждём триггер"
+        "WATCH_ONLY" -> "👀 Только наблюдение"
+        "STRATEGY_BLOCKED" -> "⛔ Стратегия заблокировала"
+        "NO_TA_DATA" -> "❔ Нет тех. данных"
+        else -> "❔ Нет данных Fusion"
+    }
+}
+
+fun zoneLabelRu(zone: String?): String {
+    return when (zone) {
+        "long_pullback_zone" -> "Зона отката LONG"
+        "short_pullback_zone" -> "Зона отката SHORT"
+        "middle_no_trade_zone" -> "Середина диапазона / не входить"
+        "high_zone" -> "Верхняя зона"
+        "low_zone" -> "Нижняя зона"
+        "neutral_zone" -> "Нейтральная зона"
+        else -> "Зона неизвестна"
+    }
+}
+
+fun heatmapLabelRu(bias: String?): String {
+    return when (bias) {
+        "strong_bullish" -> "Сильно вверх"
+        "mild_bullish" -> "Умеренно вверх"
+        "mixed_neutral" -> "Смешанный рынок"
+        "mild_bearish" -> "Умеренно вниз"
+        "strong_bearish" -> "Сильно вниз"
+        "no_data" -> "Нет данных"
+        else -> "Рынок неизвестен"
+    }
+}
+
+fun blockerLabelRu(text: String?): String {
+    return technicalReasonLabelRu(text)
+}
+
+fun needLabelRu(text: String?): String {
+    return technicalReasonLabelRu(text)
+}
+
+fun fusionNeedTextRu(fusion: ContextFusionSymbol): String {
+    val warnings = fusion.final?.warnings.orEmpty()
+    val reasons = fusion.final?.reasons.orEmpty()
+    val eaLabel = fusion.ea?.label ?: fusion.ea?.grade
+    return when {
+        warnings.isNotEmpty() -> warnings.first()
+        reasons.isNotEmpty() -> reasons.first()
+        eaLabel.isNullOrBlank() -> "trigger/EA"
+        else -> "EA: $eaLabel"
+    }
+}
+
+private fun technicalReasonLabelRu(text: String?): String {
+    val value = text?.trim().orEmpty()
+    val normalized = value.lowercase()
+    return when {
+        value.isBlank() -> "нет данных"
+        "BLOCK_NO_EA" in value -> "нет EA-подтверждения"
+        "BLOCK_EA_C" in value -> "EA слабый: C"
+        "BLOCK_EA_D" in value -> "EA плохой: D"
+        "BLOCK_EA_SCORE_LOW" in value -> "низкий EA score"
+        "BLOCK_SYMBOL_BLACKLIST" in value -> "монета в чёрном списке"
+        "BLOCK_SETUP_DISABLED" in value -> "сетап отключён"
+        "heatmap_neutral" in normalized -> "рынок не даёт преимущества"
+        "heatmap_against" in normalized -> "рынок против направления"
+        "setup_zone_against" in normalized -> "зона входа не подходит"
+        "middle_of_range" in normalized -> "цена в середине диапазона"
+        "low_volume" in normalized -> "слабый объём"
+        "near_resistance" in normalized -> "цена возле сопротивления"
+        "near_support" in normalized -> "цена возле поддержки"
+        "flat market" in normalized -> "плоский рынок / слабый ADX"
+        else -> value.take(60)
     }
 }
 
