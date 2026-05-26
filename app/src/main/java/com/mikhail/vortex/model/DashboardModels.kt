@@ -8,7 +8,8 @@ data class DashboardResponse(
     val terminal: TerminalData = TerminalData(),
     val today: TodaySummary = TodaySummary(),
     val portfolio: PortfolioSummary = PortfolioSummary(),
-    val context_fusion: ContextFusionBlock = ContextFusionBlock()
+    val context_fusion: ContextFusionBlock = ContextFusionBlock(),
+    val macro_regime: MacroRegimeBlock? = null
 )
 
 data class Market(
@@ -95,6 +96,20 @@ data class MacroData(
     val binance_btc: Double = 0.0,
     val oi_amount: Double = 0.0,
     val fng_value: Int = 50
+)
+
+data class MacroRegimeBlock(
+    val regime: String? = null,
+    val confidence: Int? = null,
+    val recommendation: MacroRecommendation? = null,
+    val reasons: List<String> = emptyList(),
+    val warnings: List<String> = emptyList()
+)
+
+data class MacroRecommendation(
+    val long_permission: String? = null,
+    val short_permission: String? = null,
+    val risk_mode: String? = null
 )
 
 data class TerminalData(

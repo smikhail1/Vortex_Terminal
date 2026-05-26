@@ -48,11 +48,13 @@ import com.mikhail.vortex.model.IchimokuContext
 import com.mikhail.vortex.ui.planner.PlannerTabContent
 import com.mikhail.vortex.ui.intelligence.IntelligenceTabContent
 import com.mikhail.vortex.viewmodel.DashboardViewModel
+import com.mikhail.vortex.viewmodel.HealthMetricsUi
 import com.mikhail.vortex.viewmodel.LogCardUi
 import com.mikhail.vortex.viewmodel.LogFilter
 import com.mikhail.vortex.viewmodel.MiniWatchUi
 import com.mikhail.vortex.viewmodel.PositionCardUi
 import com.mikhail.vortex.viewmodel.SummaryPnlUi
+import com.mikhail.vortex.model.MacroRegimeBlock
 import kotlinx.coroutines.delay
 
 private val Bg = Color(0xFF0E1116)
@@ -111,6 +113,8 @@ fun VortexTerminalScreen() {
     val serverLine by vm.serverLine.collectAsState()
     val serverDot by vm.serverDot.collectAsState()
     val mode by vm.mode.collectAsState()
+    val healthMetrics by vm.healthMetrics.collectAsState()
+    val macroRegime by vm.macroRegime.collectAsState()
     val futuresOpenCount by vm.futuresOpenCount.collectAsState()
     val spotOpenCount by vm.spotOpenCount.collectAsState()
     val futuresPositions by vm.futuresPositions.collectAsState()
@@ -145,28 +149,19 @@ fun VortexTerminalScreen() {
                         verticalArrangement = Arrangement.spacedBy(14.dp)
                     ) {
                         item {
-                            HeaderBlock(
+                            CompactDashboardHeader(
                                 status = serverStatus,
-                                serverLine = serverLine,
                                 serverDot = serverDot,
-                                mode = mode
-                            )
-                        }
-
-                        item {
-                            EquityBlock(
-                                spotFree = spotFree,
+                                mode = mode,
+                                health = healthMetrics,
                                 spotEquity = spotEquity,
-                                futuresFree = futuresFree,
                                 futuresEquity = futuresEquity,
                                 totalEquity = totalEquity,
                                 futuresOpenCount = futuresOpenCount,
-                                spotOpenCount = spotOpenCount
+                                spotOpenCount = spotOpenCount,
+                                summary = summary,
+                                macroRegime = macroRegime
                             )
-                        }
-
-                        item {
-                            TodayPnlBlock(summary = summary)
                         }
 
                         item {
@@ -404,6 +399,190 @@ fun BottomTabButton(
                 text = title,
                 color = fg,
                 fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
+fun CompactDashboardHeader(
+    status: String,
+    serverDot: String,
+    mode: String,
+    health: HealthMetricsUi,
+    spotEquity: String,
+    futuresEquity: String,
+    totalEquity: String,
+    futuresOpenCount: Int,
+    spotOpenCount: Int,
+    summary: SummaryPnlUi,
+    macroRegime: MacroRegimeBlock?
+) {
+    val accent = statusColor(status, serverDot)
+    val openCount = futuresOpenCount + spotOpenCount
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "VORTEX TERMINAL",
+                    color = Txt,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+                Text(
+                    text = health.stateText,
+                    color = colorNameToColor(health.stateColor),
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 11.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Dot(accent)
+                Spacer(modifier = Modifier.width(7.dp))
+                Text(
+                    text = "$status · $mode",
+                    color = accent,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(7.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                CompactMetricChip(health.pingText, colorNameToColor(health.pingColor), Modifier.weight(1f))
+                CompactMetricChip(health.marketAgeText, colorNameToColor(health.marketAgeColor), Modifier.weight(1f))
+                CompactMetricChip(health.taAgeText, colorNameToColor(health.taAgeColor), Modifier.weight(1f))
+                CompactMetricChip(health.uptimeText, TxtSoft, Modifier.weight(1.15f))
+            }
+
+            Spacer(modifier = Modifier.height(9.dp))
+            HorizontalDivider(color = Divider)
+            Spacer(modifier = Modifier.height(8.dp))
+
+            CompactLine(
+                title = "Balance",
+                value = "Spot $spotEquity · Fut $futuresEquity · Total $totalEquity · Open $openCount",
+                color = TxtSoft
+            )
+            Spacer(modifier = Modifier.height(5.dp))
+            CompactLine(
+                title = "PNL",
+                value = "Fut ${summary.futRealized} · Spot ${summary.spotRealized} · Total ${summary.totalRealized} · Open ${summary.totalOpen}",
+                color = colorNameToColor(summary.totalRealizedColor)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+            MacroRegimeCard(macroRegime)
+        }
+    }
+}
+
+@Composable
+fun CompactMetricChip(
+    text: String,
+    color: Color,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier
+            .background(color.copy(alpha = 0.12f), RoundedCornerShape(8.dp))
+            .border(1.dp, color.copy(alpha = 0.22f), RoundedCornerShape(8.dp))
+            .padding(horizontal = 7.dp, vertical = 5.dp)
+    ) {
+        Text(
+            text = text,
+            color = color,
+            fontSize = 10.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+fun CompactLine(
+    title: String,
+    value: String,
+    color: Color
+) {
+    Text(
+        text = "$title: $value",
+        color = color,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
+fun MacroRegimeCard(macro: MacroRegimeBlock?) {
+    val accent = macroRegimeColor(macro?.regime)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(accent.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .border(1.dp, accent.copy(alpha = 0.24f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 8.dp)
+    ) {
+        if (macro == null) {
+            Text(
+                text = "🌐 Рынок: нет данных",
+                color = Neutral,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+            return@Column
+        }
+
+        val confidence = macro.confidence?.let { " · $it" }.orEmpty()
+        val rec = macro.recommendation
+        Text(
+            text = "🌐 Рынок: ${macroRegimeLabelRu(macro.regime)}$confidence",
+            color = accent,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.Bold
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = "LONG ${macroPermissionLabelRu(rec?.long_permission)} · SHORT ${macroPermissionLabelRu(rec?.short_permission)} · Risk ${macroPermissionLabelRu(rec?.risk_mode)}",
+            color = TxtSoft,
+            fontSize = 11.sp,
+            lineHeight = 15.sp
+        )
+
+        val reason = macro.reasons.firstOrNull()?.let { macroReasonRu(it) }
+        val warning = macro.warnings.firstOrNull()?.let { macroWarningRu(it) }
+        if (!reason.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = "Причина: $reason",
+                color = TxtSoft,
+                fontSize = 10.sp,
+                lineHeight = 14.sp
+            )
+        }
+        if (!warning.isNullOrBlank()) {
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = "Предупр.: $warning",
+                color = Yellow,
+                fontSize = 10.sp,
+                lineHeight = 14.sp
             )
         }
     }
@@ -1171,6 +1350,89 @@ fun watchStatusColor(name: String): Color {
         "red" -> Red
         "blue" -> Blue
         else -> Neutral
+    }
+}
+
+fun colorNameToColor(name: String): Color {
+    return when (name) {
+        "green" -> Green
+        "yellow" -> Yellow
+        "red" -> Red
+        "blue" -> Blue
+        "orange" -> Orange
+        "purple" -> Purple
+        else -> TxtSoft
+    }
+}
+
+fun statusColor(status: String, dot: String): Color {
+    return when {
+        status == "ONLINE" -> Green
+        status == "DELAY" -> Yellow
+        status == "OFFLINE" -> Red
+        dot == "green" -> Green
+        dot == "yellow" -> Yellow
+        dot == "red" -> Red
+        else -> Neutral
+    }
+}
+
+fun macroRegimeLabelRu(value: String?): String {
+    return when (value) {
+        "risk_on_bullish" -> "Риск ON / бычий"
+        "mild_risk_on" -> "Умеренно risk-on"
+        "mixed_neutral" -> "Смешанный рынок"
+        "mild_risk_off" -> "Умеренно risk-off"
+        "risk_off_bearish" -> "Риск OFF / медвежий"
+        null, "" -> "Режим неизвестен"
+        else -> value.replace('_', ' ')
+    }
+}
+
+fun macroPermissionLabelRu(value: String?): String {
+    return when (value) {
+        "normal" -> "норма"
+        "reduced" -> "снижено"
+        "selective" -> "выборочно"
+        "selective_plus" -> "выборочно+"
+        "defensive" -> "защитный"
+        null, "" -> "—"
+        else -> value.replace('_', ' ')
+    }
+}
+
+fun macroRegimeColor(value: String?): Color {
+    return when (value) {
+        "risk_on_bullish" -> Green
+        "mild_risk_on" -> Blue
+        "mixed_neutral" -> Neutral
+        "mild_risk_off" -> Orange
+        "risk_off_bearish" -> Red
+        else -> Neutral
+    }
+}
+
+fun macroReasonRu(reason: String?): String {
+    return macroArgumentRu(reason)
+}
+
+fun macroWarningRu(warning: String?): String {
+    return macroArgumentRu(warning)
+}
+
+private fun macroArgumentRu(value: String?): String {
+    return when (value) {
+        "heatmap_bullish" -> "heatmap bullish"
+        "heatmap_bearish" -> "heatmap bearish"
+        "ichimoku_bullish_breadth" -> "Ишимоку bullish breadth"
+        "ichimoku_bearish_breadth" -> "Ишимоку bearish breadth"
+        "ichimoku_mixed_breadth" -> "Ишимоку смешанный"
+        "futures_risk_on" -> "futures risk-on"
+        "futures_risk_off" -> "futures risk-off"
+        "vortex_candidate_pressure" -> "есть кандидаты"
+        "vortex_near_miss_pressure" -> "почти-входы"
+        null, "" -> ""
+        else -> value.take(60)
     }
 }
 

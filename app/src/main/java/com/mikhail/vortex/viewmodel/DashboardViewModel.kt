@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.mikhail.vortex.model.ContextFusionBlock
 import com.mikhail.vortex.model.ContextFusionSymbol
 import com.mikhail.vortex.model.DashboardResponse
+import com.mikhail.vortex.model.HealthResponse
+import com.mikhail.vortex.model.MacroRegimeBlock
 import com.mikhail.vortex.model.Position
 import com.mikhail.vortex.model.TerminalCard
 import com.mikhail.vortex.model.TodaySummary
@@ -47,6 +49,18 @@ data class SummaryPnlUi(
     val futOpenColor: String = "neutral",
     val spotOpenColor: String = "neutral",
     val totalOpenColor: String = "neutral"
+)
+
+data class HealthMetricsUi(
+    val pingText: String = "Ping —",
+    val marketAgeText: String = "M —",
+    val taAgeText: String = "TA —",
+    val uptimeText: String = "Up —",
+    val stateText: String = "checking",
+    val pingColor: String = "neutral",
+    val marketAgeColor: String = "neutral",
+    val taAgeColor: String = "neutral",
+    val stateColor: String = "neutral"
 )
 
 data class MiniWatchUi(
@@ -110,6 +124,12 @@ class DashboardViewModel : ViewModel() {
 
     private val _mode = MutableStateFlow("PAPER")
     val mode: StateFlow<String> = _mode
+
+    private val _healthMetrics = MutableStateFlow(HealthMetricsUi())
+    val healthMetrics: StateFlow<HealthMetricsUi> = _healthMetrics
+
+    private val _macroRegime = MutableStateFlow<MacroRegimeBlock?>(null)
+    val macroRegime: StateFlow<MacroRegimeBlock?> = _macroRegime
 
     private val _futuresOpenCount = MutableStateFlow(0)
     val futuresOpenCount: StateFlow<Int> = _futuresOpenCount
@@ -187,6 +207,8 @@ class DashboardViewModel : ViewModel() {
 
                 _serverLine.value =
                     "Server: ${health.status.uppercase()} | ${health.mode} | ping ${health.ping_ms} ms | market ${health.market_age_sec}s | ta ${health.ta_age_sec}s"
+                _healthMetrics.value = buildHealthMetrics(health)
+                _macroRegime.value = dashboard.macro_regime
 
                 _futuresOpenCount.value = dashboard.positions.fut.size
                 _spotOpenCount.value = dashboard.positions.spot.size
@@ -240,6 +262,8 @@ class DashboardViewModel : ViewModel() {
                 _serverStatus.value = "OFFLINE"
                 _serverDot.value = "red"
                 _serverLine.value = "Server: OFFLINE | ${e.message ?: "ошибка связи"}"
+                _healthMetrics.value = HealthMetricsUi(stateText = "offline", stateColor = "red")
+                _macroRegime.value = null
 
                 _spotFree.value = "0.00"
                 _spotEquity.value = "0.00"
@@ -322,6 +346,41 @@ class DashboardViewModel : ViewModel() {
             futOpenColor = pnlColorName(today.today_open_fut),
             spotOpenColor = pnlColorName(today.today_open_spot),
             totalOpenColor = pnlColorName(today.today_total_open)
+        )
+    }
+
+    private fun buildHealthMetrics(health: HealthResponse): HealthMetricsUi {
+        val pingValue = health.ping_ms.toDoubleOrNull()
+        val pingColor = when {
+            pingValue == null -> "neutral"
+            pingValue > 1000.0 -> "yellow"
+            else -> "green"
+        }
+        val marketColor = if (health.market_age_sec > 60.0) "yellow" else "green"
+        val taColor = if (health.ta_age_sec > 60.0) "yellow" else "green"
+        val stateText = when {
+            health.status.lowercase() == "online" && health.market_age_sec <= 60.0 && health.ta_age_sec <= 60.0 -> "active"
+            health.status.lowercase() == "online" -> "stale"
+            health.status.lowercase() == "degraded" -> "degraded"
+            else -> "offline"
+        }
+        val stateColor = when (stateText) {
+            "active" -> "green"
+            "stale", "degraded" -> "yellow"
+            "offline" -> "red"
+            else -> "neutral"
+        }
+
+        return HealthMetricsUi(
+            pingText = "Ping ${formatPing(health.ping_ms)}",
+            marketAgeText = "M ${formatAgeSeconds(health.market_age_sec)}",
+            taAgeText = "TA ${formatAgeSeconds(health.ta_age_sec)}",
+            uptimeText = "Up ${formatHealthUptime(health.uptime)}",
+            stateText = stateText,
+            pingColor = pingColor,
+            marketAgeColor = marketColor,
+            taAgeColor = taColor,
+            stateColor = stateColor
         )
     }
 
@@ -695,6 +754,31 @@ class DashboardViewModel : ViewModel() {
     private fun formatNullablePrice(price: Double?): String {
         if (price == null) return "-"
         return formatPrice(price)
+    }
+
+    private fun formatPing(value: String): String {
+        val parsed = value.toDoubleOrNull()
+        return if (parsed == null) {
+            "—"
+        } else {
+            "${trimZeros(parsed)}мс"
+        }
+    }
+
+    private fun formatAgeSeconds(value: Double): String {
+        return if (value >= 60.0) {
+            "${trimZeros(value / 60.0)}м"
+        } else {
+            "${trimZeros(value)}с"
+        }
+    }
+
+    private fun formatHealthUptime(value: String): String {
+        val normalized = value.trim()
+        return when (normalized.lowercase()) {
+            "", "active", "online", "offline", "degraded" -> "—"
+            else -> normalized
+        }
     }
 
     private fun pnlColorName(v: Double): String {
