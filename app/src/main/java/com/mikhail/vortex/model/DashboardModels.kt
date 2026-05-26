@@ -154,7 +154,19 @@ data class ContextFusionSymbol(
     val ea: FusionEa? = null,
     val setup_zone: FusionSetupZone? = null,
     val heatmap: FusionHeatmap? = null,
+    val ichimoku: IchimokuContext? = null,
     val final: FusionFinal? = null
+)
+
+data class IchimokuContext(
+    val available: Boolean = false,
+    val trend_bias: String? = null,
+    val cloud_state: String? = null,
+    val tk_state: String? = null,
+    val cloud_bias: String? = null,
+    val support_status: String? = null,
+    val quality: Int? = null,
+    val warnings: List<String> = emptyList()
 )
 
 data class FusionFinal(

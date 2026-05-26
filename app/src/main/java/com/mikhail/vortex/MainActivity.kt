@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mikhail.vortex.model.ContextFusionSymbol
+import com.mikhail.vortex.model.IchimokuContext
 import com.mikhail.vortex.ui.planner.PlannerTabContent
 import com.mikhail.vortex.ui.intelligence.IntelligenceTabContent
 import com.mikhail.vortex.viewmodel.DashboardViewModel
@@ -851,6 +852,7 @@ fun FusionCandidateRow(item: ContextFusionSymbol) {
     val scoreText = item.final?.score?.let { "Fusion $it" } ?: "Fusion -"
     val zoneText = zoneLineRu(item)
     val heatText = heatLineRu(item)
+    val ichimokuText = ichimokuLabelRu(item.ichimoku, item.side)
     val eaText = fusionEaLine(item)
     val blocker = item.final?.blockers?.firstOrNull()
         ?: item.policy?.code
@@ -928,6 +930,16 @@ fun FusionCandidateRow(item: ContextFusionSymbol) {
             color = TxtSoft,
             fontSize = 11.sp
         )
+
+        if (ichimokuText != null) {
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = ichimokuText,
+                color = ichimokuColor(item.ichimoku),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
 
         val actionLine = when {
             !blocker.isNullOrBlank() -> "Блок: ${blockerLabelRu(blocker)}"
@@ -1088,6 +1100,7 @@ fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
         ?: fusion.policy?.code
         ?: fusion.strategy?.blocked_reason
     val need = fusionNeedTextRu(fusion)
+    val ichimokuText = ichimokuLabelRu(fusion.ichimoku, fusion.side)
 
     Column(
         modifier = Modifier
@@ -1108,6 +1121,15 @@ fun FusionMiniBlock(fusion: ContextFusionSymbol?) {
             color = TxtSoft,
             fontSize = 11.sp
         )
+        if (ichimokuText != null) {
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = ichimokuText,
+                color = ichimokuColor(fusion.ichimoku),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
         Spacer(modifier = Modifier.height(3.dp))
         Text(
             text = if (blocker.isNullOrBlank()) {
@@ -1348,6 +1370,79 @@ fun heatSupportLabelRu(status: String?): String {
         "neutral_plus" -> "слегка поддерживает"
         "watch" -> "наблюдение"
         else -> ""
+    }
+}
+
+fun ichimokuLabelRu(ichimoku: IchimokuContext?, side: String?): String? {
+    if (ichimoku?.available != true) return null
+
+    val normalizedSide = side?.uppercase().orEmpty().ifBlank { "направление" }
+    val warning = ichimoku.warnings.firstOrNull()
+    val base = when {
+        ichimoku.cloud_state == "inside_cloud" || warning == "inside_cloud" ->
+            "Ишимоку: цена в облаке"
+        ichimoku.support_status == "supportive" ->
+            "Ишимоку: поддерживает $normalizedSide"
+        ichimoku.support_status == "against" ->
+            "Ишимоку: против $normalizedSide"
+        ichimoku.support_status == "neutral" ->
+            "Ишимоку: нейтрально"
+        !warning.isNullOrBlank() ->
+            "Ишимоку: ${ichimokuWarningRu(warning)}"
+        else ->
+            "Ишимоку: нет ясного сигнала"
+    }
+
+    val trend = ichimokuTrendCompact(ichimoku.trend_bias)
+        .takeUnless { it.isBlank() || ichimoku.cloud_state == "inside_cloud" || warning == "inside_cloud" }
+    val quality = ichimoku.quality?.let { "q$it" }
+    val suffix = listOfNotNull(trend, quality).joinToString(" · ")
+
+    return if (suffix.isBlank()) base else "$base · $suffix"
+}
+
+fun ichimokuCloudLabelRu(cloud: String?): String {
+    return when (cloud) {
+        "above_cloud" -> "выше облака"
+        "below_cloud" -> "ниже облака"
+        "inside_cloud" -> "в облаке"
+        "no_data" -> "нет облака"
+        "error" -> "ошибка"
+        else -> "облако неизвестно"
+    }
+}
+
+fun ichimokuWarningRu(warning: String?): String {
+    return when (warning) {
+        "inside_cloud" -> "цена в облаке"
+        "thin_cloud" -> "тонкое облако"
+        "far_from_kijun" -> "далеко от Kijun"
+        "not_enough_candles" -> "мало свечей"
+        "invalid_price" -> "некорректная цена"
+        else -> warning?.take(60) ?: "нет данных"
+    }
+}
+
+fun ichimokuColor(ichimoku: IchimokuContext?): Color {
+    return when {
+        ichimoku?.available != true -> Neutral
+        ichimoku.cloud_state == "inside_cloud" -> Yellow
+        ichimoku.support_status == "supportive" -> Green
+        ichimoku.support_status == "against" -> Red
+        ichimoku.support_status == "neutral" -> Yellow
+        else -> Neutral
+    }
+}
+
+private fun ichimokuTrendCompact(trend: String?): String {
+    return when (trend) {
+        "bullish" -> "bullish"
+        "bearish" -> "bearish"
+        "neutral" -> "neutral"
+        "mixed" -> "mixed"
+        "no_data" -> ""
+        "error" -> ""
+        else -> trend.orEmpty()
     }
 }
 
