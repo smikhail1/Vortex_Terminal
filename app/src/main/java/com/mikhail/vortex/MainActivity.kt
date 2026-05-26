@@ -115,6 +115,9 @@ fun VortexTerminalScreen() {
     val futuresPositions by vm.futuresPositions.collectAsState()
     val spotPositions by vm.spotPositions.collectAsState()
     val miniWatchlist by vm.miniWatchlist.collectAsState()
+    val topFusionCandidates by vm.topFusionCandidates.collectAsState()
+    val fusionCandidatesAvailable by vm.fusionCandidatesAvailable.collectAsState()
+    val fusionCandidatesSourceCount by vm.fusionCandidatesSourceCount.collectAsState()
     val summary by vm.summary.collectAsState()
     val logCards by vm.logCards.collectAsState()
     val logFilter by vm.logFilter.collectAsState()
@@ -183,6 +186,18 @@ fun VortexTerminalScreen() {
                             item { EmptySectionCard("Нет активных спот-позиций") }
                         } else {
                             items(spotPositions) { pos -> PositionCard(pos) }
+                        }
+
+                        item {
+                            SectionTitle("🔥 Лучшие Fusion-кандидаты")
+                        }
+
+                        item {
+                            FusionCandidatesBlock(
+                                items = topFusionCandidates,
+                                available = fusionCandidatesAvailable,
+                                sourceCount = fusionCandidatesSourceCount
+                            )
                         }
 
                         item {
@@ -793,6 +808,145 @@ fun MetricBlock(
 }
 
 @Composable
+fun FusionCandidatesBlock(
+    items: List<ContextFusionSymbol>,
+    available: Boolean,
+    sourceCount: Int
+) {
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Panel),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            when {
+                !available -> FusionCandidatesEmptyText("Fusion-кандидаты недоступны")
+                sourceCount == 0 -> FusionCandidatesEmptyText("Нет Fusion-кандидатов")
+                items.isEmpty() -> FusionCandidatesEmptyText("Нет сильных Fusion-кандидатов")
+                else -> items.forEachIndexed { idx, item ->
+                    if (idx > 0) {
+                        HorizontalDivider(color = Divider, modifier = Modifier.padding(vertical = 8.dp))
+                    }
+                    FusionCandidateRow(item)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun FusionCandidatesEmptyText(text: String) {
+    Text(
+        text = text,
+        color = Neutral,
+        fontSize = 12.sp,
+        fontWeight = FontWeight.SemiBold
+    )
+}
+
+@Composable
+fun FusionCandidateRow(item: ContextFusionSymbol) {
+    val view = item.final?.view
+    val color = fusionColor(view)
+    val scoreText = item.final?.score?.let { "Fusion $it" } ?: "Fusion -"
+    val zoneText = zoneLineRu(item)
+    val heatText = heatLineRu(item)
+    val eaText = fusionEaLine(item)
+    val blocker = item.final?.blockers?.firstOrNull()
+        ?: item.policy?.code
+        ?: item.strategy?.blocked_reason
+    val warning = item.final?.warnings?.firstOrNull()
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(color.copy(alpha = 0.10f), RoundedCornerShape(12.dp))
+            .border(1.dp, color.copy(alpha = 0.30f), RoundedCornerShape(12.dp))
+            .padding(horizontal = 10.dp, vertical = 9.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier.weight(1f),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = item.symbol.uppercase(),
+                    color = Txt,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 13.sp
+                )
+                val side = item.side?.uppercase().orEmpty()
+                if (side.isNotBlank()) {
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = side,
+                        color = TxtSoft,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 11.sp
+                    )
+                }
+            }
+            Text(
+                text = scoreText,
+                color = color,
+                fontWeight = FontWeight.Bold,
+                fontSize = 12.sp
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = fusionLabelRu(view),
+            color = color,
+            fontWeight = FontWeight.Bold,
+            fontSize = 12.sp
+        )
+
+        if (eaText != null) {
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = eaText,
+                color = TxtSoft,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = zoneText,
+            color = TxtSoft,
+            fontSize = 11.sp
+        )
+        Spacer(modifier = Modifier.height(3.dp))
+        Text(
+            text = heatText,
+            color = TxtSoft,
+            fontSize = 11.sp
+        )
+
+        val actionLine = when {
+            !blocker.isNullOrBlank() -> "Блок: ${blockerLabelRu(blocker)}"
+            !warning.isNullOrBlank() -> "Нужно: ${needLabelRu(warning)}"
+            else -> null
+        }
+        if (actionLine != null) {
+            Spacer(modifier = Modifier.height(3.dp))
+            Text(
+                text = actionLine,
+                color = if (blocker.isNullOrBlank()) TxtSoft else color,
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+    }
+}
+
+@Composable
 fun MiniWatchlistBlock(items: List<MiniWatchUi>) {
     Card(
         shape = RoundedCornerShape(16.dp),
@@ -1138,6 +1292,7 @@ fun fusionColor(view: String?): Color {
         "RAW_CANDIDATE_BAD_CONTEXT" -> Orange
         "POLICY_BLOCKED" -> Red
         "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> Purple
+        "ENTRY_CANDIDATE_WEAK_CONTEXT" -> Orange
         "WATCH_ONLY" -> Neutral
         "STRATEGY_BLOCKED" -> Neutral
         "NO_TA_DATA" -> Color(0xFF4F5865)
@@ -1153,6 +1308,7 @@ fun fusionLabelRu(view: String?): String {
         "RAW_CANDIDATE_BAD_CONTEXT" -> "⚠️ Плохой контекст"
         "POLICY_BLOCKED" -> "🛡 Заблокировано фильтром"
         "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> "👀 Хорошая зона, ждём триггер"
+        "ENTRY_CANDIDATE_WEAK_CONTEXT" -> "⚠️ Кандидат, слабый контекст"
         "WATCH_ONLY" -> "👀 Только наблюдение"
         "STRATEGY_BLOCKED" -> "⛔ Стратегия заблокировала"
         "NO_TA_DATA" -> "❔ Нет тех. данных"
@@ -1182,6 +1338,47 @@ fun heatmapLabelRu(bias: String?): String {
         "no_data" -> "Нет данных"
         else -> "Рынок неизвестен"
     }
+}
+
+fun heatSupportLabelRu(status: String?): String {
+    return when (status) {
+        "supportive" -> "поддерживает"
+        "against" -> "против"
+        "neutral" -> "нейтрально"
+        "neutral_plus" -> "слегка поддерживает"
+        "watch" -> "наблюдение"
+        else -> ""
+    }
+}
+
+fun zoneLineRu(fusion: ContextFusionSymbol): String {
+    val zone = zoneLabelRu(fusion.setup_zone?.preferred_zone)
+    val quality = fusion.setup_zone?.zone_quality?.let { " q$it" }.orEmpty()
+    return "Зона: $zone$quality"
+}
+
+fun heatLineRu(fusion: ContextFusionSymbol): String {
+    val heat = heatmapLabelRu(
+        fusion.heatmap?.global?.bias ?: fusion.heatmap?.local_bias
+    )
+    val support = heatSupportLabelRu(
+        fusion.heatmap?.global?.support_status ?: fusion.setup_zone?.support_status
+    )
+    return if (support.isBlank()) {
+        "Рынок: $heat"
+    } else {
+        "Рынок: $heat / $support"
+    }
+}
+
+fun fusionEaLine(fusion: ContextFusionSymbol): String? {
+    val ea = fusion.ea ?: return null
+    if (ea.present != true) return null
+    val raw = ea.raw?.takeIf { it.isNotBlank() }
+    if (raw != null) return "EA: $raw"
+    val grade = ea.grade?.takeIf { it.isNotBlank() }
+    val score = ea.score?.let { "/$it" }.orEmpty()
+    return grade?.let { "EA: EA:$it$score" }
 }
 
 fun blockerLabelRu(text: String?): String {

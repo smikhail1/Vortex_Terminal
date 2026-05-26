@@ -126,6 +126,15 @@ class DashboardViewModel : ViewModel() {
     private val _miniWatchlist = MutableStateFlow<List<MiniWatchUi>>(emptyList())
     val miniWatchlist: StateFlow<List<MiniWatchUi>> = _miniWatchlist
 
+    private val _topFusionCandidates = MutableStateFlow<List<ContextFusionSymbol>>(emptyList())
+    val topFusionCandidates: StateFlow<List<ContextFusionSymbol>> = _topFusionCandidates
+
+    private val _fusionCandidatesAvailable = MutableStateFlow(false)
+    val fusionCandidatesAvailable: StateFlow<Boolean> = _fusionCandidatesAvailable
+
+    private val _fusionCandidatesSourceCount = MutableStateFlow(0)
+    val fusionCandidatesSourceCount: StateFlow<Int> = _fusionCandidatesSourceCount
+
     private val _summary = MutableStateFlow(SummaryPnlUi())
     val summary: StateFlow<SummaryPnlUi> = _summary
 
@@ -204,6 +213,11 @@ class DashboardViewModel : ViewModel() {
                 } catch (e: Exception) {
                     null
                 }
+
+                _fusionCandidatesAvailable.value = dashboard.context_fusion.available
+                _fusionCandidatesSourceCount.value = fusionCandidateSourceCount(dashboard.context_fusion)
+                _topFusionCandidates.value = buildTopFusionCandidates(dashboard.context_fusion)
+
                 _miniWatchlist.value = if (watchlistResponse != null) {
                     buildMiniWatchlistFromApi(
                         items = watchlistResponse.data.all,
@@ -238,6 +252,9 @@ class DashboardViewModel : ViewModel() {
                 _futuresPositions.value = emptyList()
                 _spotPositions.value = emptyList()
                 _miniWatchlist.value = emptyList()
+                _topFusionCandidates.value = emptyList()
+                _fusionCandidatesAvailable.value = false
+                _fusionCandidatesSourceCount.value = 0
                 _summary.value = SummaryPnlUi()
                 _allLogCards.value = emptyList()
                 _logCards.value = emptyList()
@@ -427,6 +444,19 @@ class DashboardViewModel : ViewModel() {
         return fusionBlock.symbols
             .filter { it.symbol.isNotBlank() }
             .associateBy { it.symbol.uppercase() }
+    }
+
+    private fun buildTopFusionCandidates(
+        fusionBlock: ContextFusionBlock
+    ): List<ContextFusionSymbol> {
+        if (!fusionBlock.available) return emptyList()
+        val source = fusionBlock.important.ifEmpty { fusionBlock.symbols }
+        return topFusionCandidates(source)
+    }
+
+    private fun fusionCandidateSourceCount(fusionBlock: ContextFusionBlock): Int {
+        if (!fusionBlock.available) return 0
+        return fusionBlock.important.ifEmpty { fusionBlock.symbols }.size
     }
 
     private fun statusRank(status: String): Int {
@@ -681,5 +711,42 @@ class DashboardViewModel : ViewModel() {
         } else {
             String.format("%.2f", v).trimEnd('0').trimEnd('.')
         }
+    }
+}
+
+fun topFusionCandidates(symbols: List<ContextFusionSymbol>): List<ContextFusionSymbol> {
+    return symbols
+        .filter { symbol ->
+            val view = symbol.final?.view
+            val score = symbol.final?.score ?: 0
+            when (view) {
+                "ENTRY_CANDIDATE_STRONG",
+                "RAW_CANDIDATE_WAIT_EA_GOOD_ZONE",
+                "POLICY_BLOCKED",
+                "RAW_CANDIDATE_WAIT_EA",
+                "WATCH_GOOD_ZONE_WAIT_TRIGGER",
+                "ENTRY_CANDIDATE_WEAK_CONTEXT" -> true
+                "RAW_CANDIDATE_BAD_CONTEXT" -> score >= 50
+                else -> false
+            }
+        }
+        .sortedWith(
+            compareBy<ContextFusionSymbol> { fusionPriority(it.final?.view) }
+                .thenByDescending { it.final?.score ?: 0 }
+                .thenBy { it.symbol.uppercase() }
+        )
+        .take(8)
+}
+
+private fun fusionPriority(view: String?): Int {
+    return when (view) {
+        "ENTRY_CANDIDATE_STRONG" -> 0
+        "RAW_CANDIDATE_WAIT_EA_GOOD_ZONE" -> 1
+        "POLICY_BLOCKED" -> 2
+        "RAW_CANDIDATE_WAIT_EA" -> 3
+        "WATCH_GOOD_ZONE_WAIT_TRIGGER" -> 4
+        "ENTRY_CANDIDATE_WEAK_CONTEXT" -> 5
+        "RAW_CANDIDATE_BAD_CONTEXT" -> 6
+        else -> 99
     }
 }

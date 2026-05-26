@@ -134,7 +134,8 @@ data class PortfolioSummary(
 data class ContextFusionBlock(
     val available: Boolean = false,
     val summary: ContextFusionSummary? = null,
-    val symbols: List<ContextFusionSymbol> = emptyList()
+    val symbols: List<ContextFusionSymbol> = emptyList(),
+    val important: List<ContextFusionSymbol> = emptyList()
 )
 
 data class ContextFusionSummary(
