@@ -20,10 +20,8 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
@@ -32,9 +30,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
-import com.mikhail.vortex.api.ApiClient
 import com.mikhail.vortex.model.IntelligenceResponse
-import kotlinx.coroutines.delay
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.mikhail.vortex.viewmodel.IntelligenceViewModel
 
 private val Panel = Color(0xFF171B22)
 private val PanelSoft = Color(0xFF1C212A)
@@ -52,19 +50,13 @@ fun IntelligenceTabContent(
     serverStatus: String,
     serverDot: String
 ) {
-    var data by remember { mutableStateOf<IntelligenceResponse?>(null) }
-    var error by remember { mutableStateOf("") }
+    val vm: IntelligenceViewModel = viewModel()
+    val uiState by vm.uiState.collectAsState()
+    val data = uiState.data
+    val error = uiState.error
 
     LaunchedEffect(Unit) {
-        while (true) {
-            try {
-                data = ApiClient.api.getIntelligence()
-                error = ""
-            } catch (e: Exception) {
-                error = e.message ?: "connection error"
-            }
-            delay(5000)
-        }
+        vm.startAutoRefresh()
     }
 
     LazyColumn(

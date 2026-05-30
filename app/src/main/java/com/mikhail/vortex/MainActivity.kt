@@ -47,6 +47,7 @@ import com.mikhail.vortex.model.ContextFusionSymbol
 import com.mikhail.vortex.model.IchimokuContext
 import com.mikhail.vortex.ui.planner.PlannerTabContent
 import com.mikhail.vortex.ui.intelligence.IntelligenceTabContent
+import com.mikhail.vortex.ui.analytics.MarketAnalyticsTabContent
 import com.mikhail.vortex.viewmodel.DashboardViewModel
 import com.mikhail.vortex.viewmodel.HealthMetricsUi
 import com.mikhail.vortex.viewmodel.LogCardUi
@@ -84,6 +85,7 @@ private val LogGreenBg = Color(0x1625A55B)
 
 enum class BottomTab {
     TERMINAL,
+    SUMMARY,
     LOGS,
     PLANNER,
     INTELLIGENCE
@@ -205,6 +207,16 @@ fun VortexTerminalScreen() {
                         } else {
                             item { MiniWatchlistBlock(miniWatchlist) }
                         }
+                    }
+                }
+
+                BottomTab.SUMMARY -> {
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxWidth()
+                    ) {
+                        MarketAnalyticsTabContent()
                     }
                 }
 
@@ -347,11 +359,11 @@ fun BottomBar(
             }
 
             BottomTabButton(
-                title = "Logs",
-                selected = selectedTab == BottomTab.LOGS,
+                title = "Сводка",
+                selected = selectedTab == BottomTab.SUMMARY,
                 modifier = Modifier.weight(1f)
             ) {
-                onSelect(BottomTab.LOGS)
+                onSelect(BottomTab.SUMMARY)
             }
 
             BottomTabButton(

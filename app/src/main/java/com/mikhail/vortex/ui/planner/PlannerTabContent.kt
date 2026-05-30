@@ -2,6 +2,7 @@ package com.mikhail.vortex.ui.planner
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,6 +28,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +41,6 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.mikhail.vortex.model.SpotIdea
 import com.mikhail.vortex.viewmodel.PlannerViewModel
-import kotlinx.coroutines.delay
 
 private val Panel = Color(0xFF171B22)
 private val Divider = Color(0xFF2A313D)
@@ -69,12 +71,10 @@ fun PlannerTabContent(
 ) {
     val vm: PlannerViewModel = viewModel()
     val ideas by vm.ideas.collectAsState()
+    val expandedMap = remember { mutableStateMapOf<String, Boolean>() }
 
     LaunchedEffect(Unit) {
-        while (true) {
-            vm.loadPlanner()
-            delay(5000)
-        }
+        vm.startAutoRefresh()
     }
 
     LazyColumn(
@@ -98,8 +98,25 @@ fun PlannerTabContent(
                 )
             }
         } else {
-            items(ideas) { idea ->
-                SpotPlannerPremiumCard(idea)
+            // Planner Compact Sort v1
+            val sortedIdeas = ideas.sortedWith(PlannerSignals.comparator())
+
+            item {
+                Text(
+                    text = "Отсортировано по близости к сигналу: готовность → зона → confidence → риск",
+                    color = TxtSoft,
+                    fontSize = 12.sp,
+                    modifier = Modifier.padding(start = 2.dp, bottom = 2.dp)
+                )
+            }
+
+            items(sortedIdeas) { idea ->
+                val expanded = expandedMap[idea.symbol] == true
+                SpotPlannerCompactCard(
+                    idea = idea,
+                    expanded = expanded,
+                    onToggle = { expandedMap[idea.symbol] = !expanded }
+                )
             }
         }
     }
@@ -197,6 +214,132 @@ private fun EmptyPlannerCard(text: String) {
         }
     }
 }
+
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun SpotPlannerCompactCard(idea: SpotIdea, expanded: Boolean, onToggle: () -> Unit) {
+    Card(
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.Transparent),
+        modifier = Modifier
+            .fillMaxWidth()
+            .border(1.dp, Divider, RoundedCornerShape(18.dp))
+            .clickable { onToggle() }
+    ) {
+        Column(
+            modifier = Modifier
+                .background(PlannerCardBg)
+                .padding(14.dp)
+        ) {
+            PlannerCompactHeader(idea, expanded)
+
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = Divider)
+                Spacer(modifier = Modifier.height(12.dp))
+
+                ActionBlock(actionLabel = idea.action_label, actionHint = idea.action_hint)
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    MiniMetricCard("Confidence", "${idea.confidence_score} · ${idea.confidence_band}", PlannerGold, Modifier.weight(1f))
+                    MiniMetricCard("RR", formatRR(idea.rr_ratio), PlannerMint, Modifier.weight(1f))
+                    MiniMetricCard("Риск", shortRiskLabel(idea.risk_grade), riskColor(idea.risk_grade), Modifier.weight(1f))
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        InfoTitle("Текущая цена")
+                        InfoValue(formatPrice(idea.current_price))
+                        Spacer(modifier = Modifier.height(12.dp))
+                        ZoneBlock("${formatPrice(idea.accumulation_zone.top)} — ${formatPrice(idea.accumulation_zone.bottom)}")
+                        Spacer(modifier = Modifier.height(12.dp))
+                        SectionSubTitle("Лесенка входа")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        idea.entries.forEach { entry ->
+                            LadderRow("${entry.allocation_pct}%", formatPrice(entry.price))
+                            Spacer(modifier = Modifier.height(6.dp))
+                        }
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        SectionSubTitle("Цели TP")
+                        Spacer(modifier = Modifier.height(8.dp))
+                        idea.targets.forEachIndexed { index, target ->
+                            TargetRow("TP${index + 1} ${formatPrice(target.price)}", "${target.close_pct}%")
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+                        InvalidationBlock("ниже ${formatPrice(idea.invalidation)}")
+                        Spacer(modifier = Modifier.height(10.dp))
+                        MiniMetricCard("Средний вход", formatPrice(idea.avg_entry), Blue, Modifier.fillMaxWidth())
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+                HorizontalDivider(color = Divider)
+                Spacer(modifier = Modifier.height(10.dp))
+
+                Text("Аргументы", color = PlannerGold, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                Spacer(modifier = Modifier.height(8.dp))
+
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    idea.thesis.forEach { thesis -> ThesisTag(thesis) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlannerCompactHeader(idea: SpotIdea, expanded: Boolean) {
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+        Column(modifier = Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier.size(28.dp).clip(CircleShape).background(Blue.copy(alpha = 0.18f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text("◈", color = Blue, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                Text(
+                    text = "#${idea.priority_rank} ${idea.symbol}",
+                    color = Txt,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                PlannerChip(idea.tier, Blue)
+                PlannerChip(compactStatusLabel(idea.status), statusColor(idea.status))
+                PlannerChip(readinessLabel(idea.readiness), readinessColor(idea.readiness))
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Text("Горизонт: ${idea.horizon}", color = TxtSoft, fontSize = 12.sp)
+        }
+
+        Column(horizontalAlignment = Alignment.End) {
+            Text(shortRiskLabel(idea.risk_grade), color = riskColor(idea.risk_grade), fontWeight = FontWeight.Bold, fontSize = 13.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(signalDistanceLabel(idea), color = signalDistanceColor(idea), fontWeight = FontWeight.Bold, fontSize = 12.sp)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(if (expanded) "▲" else "▼", color = TxtSoft, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+        }
+    }
+}
+
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -794,6 +937,54 @@ private fun formatPrice(price: Double): String {
 private fun formatPct(v: Double): String {
     return if (v > 0) String.format("+%.2f%%", v) else String.format("%.2f%%", v)
 }
+
+
+private fun plannerSignalComparator(): Comparator<SpotIdea> {
+    return PlannerSignals.comparator()
+}
+
+private fun readinessRank(readiness: String): Int {
+    return PlannerSignals.readinessRank(readiness)
+}
+
+private fun zoneDistanceRank(idea: SpotIdea): Int {
+    return PlannerSignals.zoneDistanceRank(idea)
+}
+
+private fun riskRank(risk: String): Int {
+    return PlannerSignals.riskRank(risk)
+}
+
+private fun signalDistanceLabel(idea: SpotIdea): String {
+    val readiness = readinessRank(idea.readiness)
+    val zone = zoneDistanceRank(idea)
+    return when {
+        readiness == 0 || zone == 0 -> "ГОТОВО"
+        readiness == 1 || zone == 1 -> "СКОРО"
+        readiness == 2 || zone == 2 -> "РАНО"
+        else -> "ПОЗЖЕ"
+    }
+}
+
+private fun signalDistanceColor(idea: SpotIdea): Color {
+    return when (signalDistanceLabel(idea)) {
+        "ГОТОВО" -> Green
+        "СКОРО" -> Yellow
+        "РАНО" -> TxtSoft
+        else -> Neutral
+    }
+}
+
+private fun compactStatusLabel(status: String): String {
+    val st = status.lowercase()
+    return when {
+        "above" in st || "выше" in st -> "Выше зоны"
+        "inside" in st || "внут" in st -> "Внутри зоны"
+        "below" in st || "ниже" in st -> "Ниже зоны"
+        else -> status.ifBlank { "Статус" }
+    }
+}
+
 
 private fun formatRR(v: Double): String {
     return String.format("%.2f", v)

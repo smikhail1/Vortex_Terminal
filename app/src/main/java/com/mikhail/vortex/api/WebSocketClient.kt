@@ -1,5 +1,6 @@
 package com.mikhail.vortex.api
 
+import com.mikhail.vortex.BuildConfig
 import okhttp3.*
 import okio.ByteString
 
@@ -10,7 +11,7 @@ class WebSocketClient {
 
     fun connect(onMessage: (String) -> Unit) {
         val request = Request.Builder()
-            .url("ws://18.195.239.151:8000/ws")
+            .url(BuildConfig.VORTEX_WS_URL)
             .build()
 
         webSocket = client.newWebSocket(request, object : WebSocketListener() {
